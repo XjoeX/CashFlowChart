@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const clearDataBtn = document.getElementById('clear-data-btn');
     const exportDataBtn = document.getElementById('export-data-btn');
     const importDataBtn = document.getElementById('import-data-btn');
+    const exportImageBtn = document.getElementById('export-image-btn');
     const importFile = document.getElementById('import-file');
     
     // 应用状态
@@ -143,6 +144,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 const file = e.target.files[0];
                 importData(file);
             }
+        });
+        
+        exportImageBtn.addEventListener('click', function() {
+            console.log('导出图片按钮被点击');
+            exportImage();
         });
         
         // 初始化汇总信息
@@ -337,6 +343,11 @@ document.addEventListener('DOMContentLoaded', function() {
             nameElement.className = 'node-name';
             nodeElement.appendChild(nameElement);
             
+            // 创建节点流入元素
+            const inflowElement = document.createElement('div');
+            inflowElement.className = 'node-inflow';
+            nodeElement.appendChild(inflowElement);
+            
             // 创建节点余额元素
             const balanceElement = document.createElement('div');
             balanceElement.className = 'node-balance';
@@ -381,14 +392,19 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 更新节点内容
         const nameElement = nodeElement.querySelector('.node-name');
+        const inflowElement = nodeElement.querySelector('.node-inflow');
         const balanceElement = nodeElement.querySelector('.node-balance');
         
         nameElement.textContent = node.name;
         
+        // 显示流入金额
+        inflowElement.textContent = `流入: ${node.inflow.toFixed(2)}`;
+        inflowElement.classList.add('positive');
+        
         // 计算并显示最终余额
-        const netFlow = node.inflow - node.outflow;
-        const finalBalance = node.balance + netFlow;
-        balanceElement.textContent = finalBalance;
+        const netFlow = parseFloat((node.inflow - node.outflow).toFixed(2));
+        const finalBalance = parseFloat((node.balance + netFlow).toFixed(2));
+        balanceElement.textContent = `余额: ${finalBalance.toFixed(2)}`;
         
         // 添加正/负余额的视觉指示
         if (finalBalance > 0) {
@@ -555,7 +571,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 更新标签内容
         const labelElement = edgeElement.querySelector('.edge-label');
-        labelElement.textContent = `${edge.amount}${edge.description ? ` (${edge.description})` : ''}`;
+        const formattedAmount = parseFloat(edge.amount).toFixed(2);
+        labelElement.textContent = `${formattedAmount}${edge.description ? ` (${edge.description})` : ''}`;
         
         return edgeElement;
     }
@@ -704,16 +721,34 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 更新节点属性
         state.selectedNode.name = nodeName.value;
-        state.selectedNode.balance = parseFloat(nodeBalance.value) || 0;
+        state.selectedNode.balance = parseFloat(parseFloat(nodeBalance.value).toFixed(2)) || 0;
         
         // 更新节点显示
         const nodeElement = document.getElementById(`node-${state.selectedNode.id}`);
         if (nodeElement) {
             const nameElement = nodeElement.querySelector('.node-name');
+            const inflowElement = nodeElement.querySelector('.node-inflow');
             const balanceElement = nodeElement.querySelector('.node-balance');
             
             if (nameElement) nameElement.textContent = state.selectedNode.name;
-            if (balanceElement) balanceElement.textContent = state.selectedNode.balance;
+            if (inflowElement) inflowElement.textContent = `流入: ${state.selectedNode.inflow.toFixed(2)}`;
+            
+            if (balanceElement) {
+                const netFlow = parseFloat((state.selectedNode.inflow - state.selectedNode.outflow).toFixed(2));
+                const finalBalance = parseFloat((state.selectedNode.balance + netFlow).toFixed(2));
+                balanceElement.textContent = `余额: ${finalBalance.toFixed(2)}`;
+                
+                // 更新余额样式
+                if (finalBalance > 0) {
+                    balanceElement.classList.add('positive');
+                    balanceElement.classList.remove('negative');
+                } else if (finalBalance < 0) {
+                    balanceElement.classList.add('negative');
+                    balanceElement.classList.remove('positive');
+                } else {
+                    balanceElement.classList.remove('positive', 'negative');
+                }
+            }
         }
         
         // 重新计算流量
@@ -731,7 +766,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('保存连接属性', edgeAmount.value, edgeDescription.value);
         
         // 更新连接属性
-        state.selectedEdge.amount = parseFloat(edgeAmount.value) || 0;
+        state.selectedEdge.amount = parseFloat(parseFloat(edgeAmount.value).toFixed(2)) || 0;
         state.selectedEdge.description = edgeDescription.value;
         
         // 更新连接显示
@@ -739,7 +774,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (edgeElement) {
             const labelElement = edgeElement.querySelector('.edge-label');
             if (labelElement) {
-                labelElement.textContent = `${state.selectedEdge.amount}${state.selectedEdge.description ? ` (${state.selectedEdge.description})` : ''}`;
+                const formattedAmount = parseFloat(state.selectedEdge.amount).toFixed(2);
+                labelElement.textContent = `${formattedAmount}${state.selectedEdge.description ? ` (${state.selectedEdge.description})` : ''}`;
             }
         }
         
@@ -840,8 +876,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (sourceNode && targetNode) {
                 const amount = parseFloat(edge.amount) || 0;
-                sourceNode.outflow += amount;
-                targetNode.inflow += amount;
+                sourceNode.outflow = parseFloat((sourceNode.outflow + amount).toFixed(2));
+                targetNode.inflow = parseFloat((targetNode.inflow + amount).toFixed(2));
             }
         });
         
@@ -854,11 +890,20 @@ document.addEventListener('DOMContentLoaded', function() {
         state.nodes.forEach(node => {
             const nodeElement = document.getElementById(`node-${node.id}`);
             if (nodeElement) {
+                const inflowElement = nodeElement.querySelector('.node-inflow');
                 const balanceElement = nodeElement.querySelector('.node-balance');
+                
+                // 更新流入显示
+                if (inflowElement) {
+                    inflowElement.textContent = `流入: ${node.inflow.toFixed(2)}`;
+                    inflowElement.classList.add('positive');
+                }
+                
+                // 更新余额显示
                 if (balanceElement) {
-                    const netFlow = node.inflow - node.outflow;
-                    const finalBalance = node.balance + netFlow;
-                    balanceElement.textContent = finalBalance;
+                    const netFlow = parseFloat((node.inflow - node.outflow).toFixed(2));
+                    const finalBalance = parseFloat((node.balance + netFlow).toFixed(2));
+                    balanceElement.textContent = `余额: ${finalBalance.toFixed(2)}`;
                     
                     // 添加正/负余额的视觉指示
                     if (finalBalance > 0) {
@@ -890,23 +935,23 @@ document.addEventListener('DOMContentLoaded', function() {
         state.edges.forEach(edge => {
             totalFlow += parseFloat(edge.amount) || 0;
         });
-        summaryHTML += `<div class="summary-item">总流量: ${totalFlow}</div>`;
+        summaryHTML += `<div class="summary-item">总流量: ${totalFlow.toFixed(2)}</div>`;
         
         // 节点余额
         if (state.nodes.length > 0) {
             summaryHTML += '<div class="summary-item"><strong>节点余额:</strong></div>';
             state.nodes.forEach(node => {
-                const netFlow = node.inflow - node.outflow;
-                const finalBalance = node.balance + netFlow;
+                const netFlow = parseFloat((node.inflow - node.outflow).toFixed(2));
+                const finalBalance = parseFloat((node.balance + netFlow).toFixed(2));
                 const flowClass = netFlow > 0 ? 'positive' : (netFlow < 0 ? 'negative' : '');
                 const balanceClass = finalBalance > 0 ? 'positive' : (finalBalance < 0 ? 'negative' : '');
                 
                 summaryHTML += `<div class="summary-item">
                     ${node.name}: 
-                    <span class="${balanceClass}">${finalBalance}</span>
-                    (流入: <span class="positive">${node.inflow}</span>, 
-                    流出: <span class="negative">${node.outflow}</span>, 
-                    净流量: <span class="${flowClass}">${netFlow}</span>)
+                    <span class="${balanceClass}">${finalBalance.toFixed(2)}</span>
+                    (流入: <span class="positive">${node.inflow.toFixed(2)}</span>, 
+                    流出: <span class="negative">${node.outflow.toFixed(2)}</span>, 
+                    净流量: <span class="${flowClass}">${netFlow.toFixed(2)}</span>)
                 </div>`;
             });
         }
@@ -1194,6 +1239,47 @@ document.addEventListener('DOMContentLoaded', function() {
         const dy = y - yy;
         
         return Math.sqrt(dx * dx + dy * dy);
+    }
+    
+    // 导出图片
+    function exportImage() {
+        // 创建一个临时的canvas元素
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 获取画布容器的尺寸
+        const canvasRect = canvasContainer.getBoundingClientRect();
+        canvas.width = canvasRect.width;
+        canvas.height = canvasRect.height;
+        
+        // 设置白色背景
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // 使用html2canvas库将画布容器转换为图像
+        html2canvas(canvasContainer, {
+            backgroundColor: null,
+            canvas: canvas,
+            scale: 2, // 提高清晰度
+            useCORS: true,
+            logging: false
+        }).then(function(canvas) {
+            // 将canvas转换为图片URL
+            const imgURL = canvas.toDataURL('image/png');
+            
+            // 创建下载链接
+            const downloadLink = document.createElement('a');
+            downloadLink.href = imgURL;
+            downloadLink.download = '现金流向图_' + new Date().toISOString().slice(0, 10) + '.png';
+            
+            // 触发下载
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        }).catch(function(error) {
+            console.error('导出图片失败:', error);
+            alert('导出图片失败，请确保已加载html2canvas库');
+        });
     }
     
     // 初始化应用

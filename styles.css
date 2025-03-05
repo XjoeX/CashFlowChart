@@ -118,6 +118,7 @@ input {
     background-color: #ecf0f1;
     border: 2px solid #3498db;
     border-radius: 8px;
+    padding: 10px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -141,6 +142,11 @@ input {
 .node-name {
     font-weight: bold;
     margin-bottom: 5px;
+}
+
+.node-inflow {
+    font-size: 0.9em;
+    margin-bottom: 3px;
 }
 
 .node-balance {
