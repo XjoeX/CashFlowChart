@@ -25,12 +25,21 @@ document.addEventListener('DOMContentLoaded', function() {
         nextEdgeId: 1,
         selectedNode: null,
         selectedEdge: null,
-        mode: 'default', // 'default', 'add-node', 'add-edge'
-        sourceNodeForEdge: null
+        mode: 'default', // 'default', 'add-node', 'add-edge', 'pan'
+        sourceNodeForEdge: null,
+        // 画布拖动相关状态
+        isPanning: false,
+        startPanX: 0,
+        startPanY: 0,
+        canvasOffsetX: 0,
+        canvasOffsetY: 0
     };
     
     // 初始化应用
     function init() {
+        // 添加画布拖动功能
+        setupCanvasPanning();
+        
         // 绑定事件
         addNodeBtn.addEventListener('click', function() {
             console.log('添加节点按钮被点击');
@@ -58,6 +67,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         canvasContainer.addEventListener('click', function(e) {
+            // 如果正在拖动画布，不处理点击事件
+            if (state.isPanning) return;
+            
             console.log('画布被点击', e.clientX, e.clientY);
             handleCanvasClick(e);
         });
@@ -69,6 +81,20 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (e.key === 'Delete') {
                 console.log('Delete键被按下');
                 deleteSelected();
+            } else if (e.key === ' ') {
+                // 空格键切换到画布拖动模式
+                if (state.mode !== 'pan') {
+                    console.log('切换到画布拖动模式');
+                    setMode('pan');
+                }
+            }
+        });
+        
+        document.addEventListener('keyup', function(e) {
+            if (e.key === ' ' && state.mode === 'pan') {
+                // 空格键释放，返回到默认模式
+                console.log('返回到默认模式');
+                setMode('default');
             }
         });
         
@@ -76,6 +102,91 @@ document.addEventListener('DOMContentLoaded', function() {
         updateSummary();
         
         console.log('应用程序初始化完成');
+    }
+    
+    // 设置画布拖动功能
+    function setupCanvasPanning() {
+        // 鼠标按下事件
+        canvasContainer.addEventListener('mousedown', function(e) {
+            // 只有在以下情况下才启动拖动：
+            // 1. 当前模式是 'pan'
+            // 2. 点击的是画布本身，而不是其中的节点或连接
+            if ((state.mode === 'pan' || e.button === 1) && e.target === canvasContainer) {
+                state.isPanning = true;
+                state.startPanX = e.clientX;
+                state.startPanY = e.clientY;
+                canvasContainer.style.cursor = 'grabbing';
+                e.preventDefault(); // 防止选择文本等默认行为
+            }
+        });
+        
+        // 鼠标移动事件
+        document.addEventListener('mousemove', function(e) {
+            if (state.isPanning) {
+                const dx = e.clientX - state.startPanX;
+                const dy = e.clientY - state.startPanY;
+                
+                // 更新画布内容的位置
+                updateCanvasPosition(dx, dy);
+                
+                // 更新起始点，为下一次移动做准备
+                state.startPanX = e.clientX;
+                state.startPanY = e.clientY;
+            }
+        });
+        
+        // 鼠标释放事件
+        document.addEventListener('mouseup', function(e) {
+            if (state.isPanning) {
+                state.isPanning = false;
+                canvasContainer.style.cursor = state.mode === 'pan' ? 'grab' : '';
+            }
+        });
+        
+        // 鼠标离开窗口事件
+        document.addEventListener('mouseleave', function() {
+            if (state.isPanning) {
+                state.isPanning = false;
+                canvasContainer.style.cursor = state.mode === 'pan' ? 'grab' : '';
+            }
+        });
+        
+        // 防止右键菜单干扰拖动
+        canvasContainer.addEventListener('contextmenu', function(e) {
+            if (state.mode === 'pan') {
+                e.preventDefault();
+            }
+        });
+        
+        // 鼠标滚轮事件，可以用于缩放（未实现）
+        canvasContainer.addEventListener('wheel', function(e) {
+            // 这里可以添加缩放功能
+            e.preventDefault();
+        });
+    }
+    
+    // 更新画布位置
+    function updateCanvasPosition(dx, dy) {
+        // 更新总偏移量
+        state.canvasOffsetX += dx;
+        state.canvasOffsetY += dy;
+        
+        // 获取所有节点和连接
+        const nodes = document.querySelectorAll('.flowchart-node');
+        const edges = document.querySelectorAll('.flowchart-edge');
+        
+        // 移动所有节点
+        nodes.forEach(node => {
+            const currentLeft = parseInt(node.style.left) || 0;
+            const currentTop = parseInt(node.style.top) || 0;
+            node.style.left = (currentLeft + dx) + 'px';
+            node.style.top = (currentTop + dy) + 'px';
+        });
+        
+        // 更新所有连接的位置
+        updateEdges();
+        
+        console.log('画布位置更新:', state.canvasOffsetX, state.canvasOffsetY);
     }
     
     // 设置当前模式
@@ -91,6 +202,15 @@ document.addEventListener('DOMContentLoaded', function() {
         // 更新UI以反映当前模式
         addNodeBtn.classList.toggle('active', mode === 'add-node');
         addEdgeBtn.classList.toggle('active', mode === 'add-edge');
+        
+        // 更新鼠标样式
+        if (mode === 'pan') {
+            canvasContainer.style.cursor = 'grab';
+        } else if (mode === 'add-node') {
+            canvasContainer.style.cursor = 'crosshair';
+        } else {
+            canvasContainer.style.cursor = '';
+        }
     }
     
     // 处理画布点击
@@ -191,10 +311,14 @@ document.addEventListener('DOMContentLoaded', function() {
         let offsetX, offsetY;
         
         element.addEventListener('mousedown', function(e) {
+            // 如果当前模式是画布拖动，不启动节点拖动
+            if (state.mode === 'pan') return;
+            
             isDragging = true;
-            offsetX = e.clientX - element.offsetLeft;
-            offsetY = e.clientY - element.offsetTop;
+            offsetX = e.clientX - parseInt(element.style.left);
+            offsetY = e.clientY - parseInt(element.style.top);
             element.style.cursor = 'grabbing';
+            e.stopPropagation(); // 防止事件冒泡到画布
         });
         
         document.addEventListener('mousemove', function(e) {

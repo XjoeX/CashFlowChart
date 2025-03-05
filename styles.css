@@ -40,6 +40,16 @@ body {
         linear-gradient(rgba(200, 200, 200, 0.1) 1px, transparent 1px),
         linear-gradient(90deg, rgba(200, 200, 200, 0.1) 1px, transparent 1px);
     background-size: 20px 20px;
+    cursor: default;
+    user-select: none;
+}
+
+#canvas-container.panning {
+    cursor: grab;
+}
+
+#canvas-container.panning:active {
+    cursor: grabbing;
 }
 
 h2, h3, h4 {
@@ -209,4 +219,17 @@ input {
 
 .negative {
     color: #e74c3c;
+}
+
+/* 添加操作提示 */
+.operation-hint {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    z-index: 100;
 }

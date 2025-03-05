@@ -46,11 +46,24 @@
                 <h3>汇总信息</h3>
                 <div id="summary-content"></div>
             </div>
+            
+            <!-- 添加操作说明 -->
+            <div class="operation-guide">
+                <h3>操作说明</h3>
+                <ul>
+                    <li>按住空格键 + 拖动：移动整个画布</li>
+                    <li>中键拖动：移动整个画布</li>
+                    <li>点击节点/连接：选择编辑</li>
+                    <li>拖动节点：改变位置</li>
+                </ul>
+            </div>
         </div>
         <div class="main-content">
             <div id="canvas-container">
                 <!-- 使用 div 而不是 canvas 来简化实现 -->
             </div>
+            <!-- 添加操作提示 -->
+            <div class="operation-hint" id="operation-hint"></div>
         </div>
     </div>
     
