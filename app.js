@@ -17,6 +17,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const saveEdgeBtn = document.getElementById('save-edge-btn');
     const summaryContent = document.getElementById('summary-content');
     
+    // 获取数据管理按钮
+    const saveDataBtn = document.getElementById('save-data-btn');
+    const loadDataBtn = document.getElementById('load-data-btn');
+    const clearDataBtn = document.getElementById('clear-data-btn');
+    const exportDataBtn = document.getElementById('export-data-btn');
+    const importDataBtn = document.getElementById('import-data-btn');
+    const importFile = document.getElementById('import-file');
+    
     // 应用状态
     const state = {
         nodes: [],
@@ -37,6 +45,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 初始化应用
     function init() {
+        // 尝试从本地存储加载数据
+        loadFromLocalStorage();
+        
         // 添加画布拖动功能
         setupCanvasPanning();
         
@@ -95,6 +106,43 @@ document.addEventListener('DOMContentLoaded', function() {
                 // 空格键释放，返回到默认模式
                 console.log('返回到默认模式');
                 setMode('default');
+            }
+        });
+        
+        // 绑定数据管理按钮事件
+        saveDataBtn.addEventListener('click', function() {
+            console.log('保存数据按钮被点击');
+            saveToLocalStorage();
+            alert('数据已保存到浏览器缓存');
+        });
+        
+        loadDataBtn.addEventListener('click', function() {
+            console.log('加载数据按钮被点击');
+            loadFromLocalStorage();
+            alert('数据已从浏览器缓存加载');
+        });
+        
+        clearDataBtn.addEventListener('click', function() {
+            console.log('清空数据按钮被点击');
+            if (confirm('确定要清空所有数据吗？此操作不可撤销。')) {
+                clearAllData();
+            }
+        });
+        
+        exportDataBtn.addEventListener('click', function() {
+            console.log('导出数据按钮被点击');
+            exportData();
+        });
+        
+        importDataBtn.addEventListener('click', function() {
+            console.log('导入数据按钮被点击');
+            importFile.click();
+        });
+        
+        importFile.addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                importData(file);
             }
         });
         
@@ -189,227 +237,290 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('画布位置更新:', state.canvasOffsetX, state.canvasOffsetY);
     }
     
-    // 设置当前模式
+    // 设置操作模式
     function setMode(mode) {
-        console.log('设置模式为:', mode);
+        console.log('设置模式:', mode);
+        
         state.mode = mode;
         
-        // 重置源节点（如果切换出添加连接模式）
-        if (mode !== 'add-edge') {
-            state.sourceNodeForEdge = null;
-        }
+        // 重置按钮状态
+        addNodeBtn.classList.remove('active');
+        addEdgeBtn.classList.remove('active');
         
-        // 更新UI以反映当前模式
-        addNodeBtn.classList.toggle('active', mode === 'add-node');
-        addEdgeBtn.classList.toggle('active', mode === 'add-edge');
+        // 重置操作提示
+        const operationHint = document.getElementById('operation-hint');
         
-        // 更新鼠标样式
-        if (mode === 'pan') {
-            canvasContainer.style.cursor = 'grab';
-        } else if (mode === 'add-node') {
-            canvasContainer.style.cursor = 'crosshair';
-        } else {
-            canvasContainer.style.cursor = '';
+        // 根据模式设置按钮状态和操作提示
+        switch (mode) {
+            case 'add-node':
+                addNodeBtn.classList.add('active');
+                operationHint.textContent = '点击画布添加节点';
+                break;
+            case 'add-edge':
+                addEdgeBtn.classList.add('active');
+                operationHint.textContent = '请选择源节点';
+                state.sourceNodeForEdge = null;
+                break;
+            case 'pan':
+                canvasContainer.classList.add('panning');
+                operationHint.textContent = '按住鼠标拖动画布';
+                break;
+            default:
+                canvasContainer.classList.remove('panning');
+                operationHint.textContent = '';
+                break;
         }
     }
     
     // 处理画布点击
     function handleCanvasClick(e) {
-        // 只处理直接在画布上的点击，而不是在节点或边上的点击
-        if (e.target !== canvasContainer) {
-            console.log('点击不在画布上，而是在:', e.target);
-            return;
-        }
+        const rect = canvasContainer.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        console.log('画布点击位置:', x, y);
         
         if (state.mode === 'add-node') {
-            console.log('在点击位置添加节点');
-            const rect = canvasContainer.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            createNode(x, y);
+            // 添加节点模式
+            const node = createNode(x, y);
             setMode('default');
+        } else if (state.mode === 'add-edge') {
+            // 添加连接模式
+            const clickedNode = findNodeAtPosition(x, y);
+            
+            if (clickedNode) {
+                if (!state.sourceNodeForEdge) {
+                    // 选择源节点
+                    state.sourceNodeForEdge = clickedNode;
+                    document.getElementById(`node-${clickedNode.id}`).classList.add('selected');
+                    document.getElementById('operation-hint').textContent = '请选择目标节点';
+                } else if (state.sourceNodeForEdge.id !== clickedNode.id) {
+                    // 选择目标节点并创建连接
+                    createEdge(state.sourceNodeForEdge, clickedNode);
+                    document.getElementById(`node-${state.sourceNodeForEdge.id}`).classList.remove('selected');
+                    state.sourceNodeForEdge = null;
+                    document.getElementById('operation-hint').textContent = '';
+                    setMode('default');
+                }
+            }
+        } else {
+            // 默认模式，检查是否点击了节点或连接
+            const clickedNode = findNodeAtPosition(x, y);
+            if (clickedNode) {
+                selectNode(clickedNode);
+                return;
+            }
+            
+            const clickedEdge = findEdgeAtPosition(x, y);
+            if (clickedEdge) {
+                selectEdge(clickedEdge);
+                return;
+            }
+            
+            // 如果没有点击任何对象，取消选择
+            deselectAll();
         }
     }
     
     // 创建新节点
     function createNode(x, y) {
-        const nodeId = 'node-' + state.nextNodeId++;
-        const nodeName = '节点 ' + (state.nextNodeId - 1);
-        
-        console.log('创建节点:', nodeId, '在', x, y);
-        
         const node = {
-            id: nodeId,
-            name: nodeName,
-            balance: 0,
+            id: state.nextNodeId++,
+            name: `节点 ${state.nextNodeId - 1}`,
             x: x,
             y: y,
+            balance: 0,
             inflow: 0,
             outflow: 0
         };
         
         state.nodes.push(node);
         renderNode(node);
-        updateSummary();
+        
+        // 自动保存到本地存储
+        saveToLocalStorage();
+        
+        return node;
     }
     
     // 渲染节点
     function renderNode(node) {
-        console.log('渲染节点:', node.id);
+        // 检查是否已经存在这个节点的元素
+        let nodeElement = document.getElementById(`node-${node.id}`);
         
-        const nodeElement = document.createElement('div');
-        nodeElement.id = node.id;
-        nodeElement.className = 'flowchart-node';
-        nodeElement.style.left = node.x + 'px';
-        nodeElement.style.top = node.y + 'px';
-        
-        const nameElement = document.createElement('div');
-        nameElement.className = 'node-name';
-        nameElement.textContent = node.name;
-        
-        const balanceElement = document.createElement('div');
-        balanceElement.className = 'node-balance';
-        balanceElement.textContent = '余额: ' + node.balance;
-        
-        nodeElement.appendChild(nameElement);
-        nodeElement.appendChild(balanceElement);
-        
-        canvasContainer.appendChild(nodeElement);
-        
-        // 添加拖动功能
-        makeDraggable(nodeElement, node);
-        
-        // 节点点击事件
-        nodeElement.addEventListener('click', function(e) {
-            e.stopPropagation();
-            console.log('节点被点击:', node.id);
+        if (!nodeElement) {
+            // 创建新的节点元素
+            nodeElement = document.createElement('div');
+            nodeElement.id = `node-${node.id}`;
+            nodeElement.className = 'flowchart-node';
+            nodeElement.dataset.id = node.id;
             
-            if (state.mode === 'add-edge') {
-                if (!state.sourceNodeForEdge) {
-                    // 第一次节点点击 - 设置为源节点
-                    state.sourceNodeForEdge = node;
-                    nodeElement.classList.add('selected');
-                } else if (state.sourceNodeForEdge !== node) {
-                    // 第二次节点点击 - 创建连接
-                    createEdge(state.sourceNodeForEdge, node);
-                    document.querySelectorAll('.flowchart-node').forEach(el => {
-                        el.classList.remove('selected');
-                    });
-                    state.sourceNodeForEdge = null;
-                    setMode('default');
-                }
-            } else {
-                // 选择节点进行编辑
+            // 创建节点名称元素
+            const nameElement = document.createElement('div');
+            nameElement.className = 'node-name';
+            nodeElement.appendChild(nameElement);
+            
+            // 创建节点余额元素
+            const balanceElement = document.createElement('div');
+            balanceElement.className = 'node-balance';
+            nodeElement.appendChild(balanceElement);
+            
+            // 添加点击事件
+            nodeElement.addEventListener('click', function(e) {
+                e.stopPropagation();
                 selectNode(node);
-            }
-        });
+            });
+            
+            // 添加到画布
+            canvasContainer.appendChild(nodeElement);
+            
+            // 使节点可拖动
+            makeDraggable(nodeElement, node);
+        }
+        
+        // 更新节点内容
+        const nameElement = nodeElement.querySelector('.node-name');
+        const balanceElement = nodeElement.querySelector('.node-balance');
+        
+        nameElement.textContent = node.name;
+        balanceElement.textContent = node.balance;
+        
+        // 更新节点位置
+        nodeElement.style.left = `${node.x}px`;
+        nodeElement.style.top = `${node.y}px`;
+        
+        return nodeElement;
     }
     
     // 使节点可拖动
     function makeDraggable(element, node) {
         let isDragging = false;
-        let offsetX, offsetY;
+        let startX, startY;
+        let originalX, originalY;
         
         element.addEventListener('mousedown', function(e) {
-            // 如果当前模式是画布拖动，不启动节点拖动
-            if (state.mode === 'pan') return;
+            // 如果是在添加连接模式，不启动拖动
+            if (state.mode === 'add-edge') return;
+            
+            // 阻止事件冒泡和默认行为
+            e.stopPropagation();
+            e.preventDefault();
             
             isDragging = true;
-            offsetX = e.clientX - parseInt(element.style.left);
-            offsetY = e.clientY - parseInt(element.style.top);
-            element.style.cursor = 'grabbing';
-            e.stopPropagation(); // 防止事件冒泡到画布
+            startX = e.clientX;
+            startY = e.clientY;
+            originalX = node.x;
+            originalY = node.y;
+            
+            // 添加拖动时的样式
+            element.classList.add('dragging');
         });
         
         document.addEventListener('mousemove', function(e) {
-            if (isDragging) {
-                const x = e.clientX - offsetX;
-                const y = e.clientY - offsetY;
-                
-                // 确保节点不会被拖出画布
-                const containerRect = canvasContainer.getBoundingClientRect();
-                const elementRect = element.getBoundingClientRect();
-                
-                const maxX = containerRect.width - elementRect.width;
-                const maxY = containerRect.height - elementRect.height;
-                
-                const boundedX = Math.max(0, Math.min(x, maxX));
-                const boundedY = Math.max(0, Math.min(y, maxY));
-                
-                element.style.left = boundedX + 'px';
-                element.style.top = boundedY + 'px';
-                
-                // 更新节点位置
-                node.x = boundedX;
-                node.y = boundedY;
-                
-                // 更新连接
-                updateEdges();
-            }
+            if (!isDragging) return;
+            
+            // 计算移动距离
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            
+            // 更新节点位置
+            node.x = originalX + dx;
+            node.y = originalY + dy;
+            
+            // 更新节点元素位置
+            element.style.left = `${node.x}px`;
+            element.style.top = `${node.y}px`;
+            
+            // 更新与该节点相关的所有连接
+            updateEdgesForNode(node);
         });
         
         document.addEventListener('mouseup', function() {
-            if (isDragging) {
-                isDragging = false;
-                element.style.cursor = '';
+            if (!isDragging) return;
+            
+            isDragging = false;
+            element.classList.remove('dragging');
+            
+            // 保存到本地存储
+            saveToLocalStorage();
+        });
+    }
+    
+    // 更新与节点相关的所有连接
+    function updateEdgesForNode(node) {
+        state.edges.forEach(edge => {
+            if (edge.source === node.id || edge.target === node.id) {
+                updateEdgePosition(edge);
             }
         });
     }
     
     // 创建连接
     function createEdge(sourceNode, targetNode) {
-        const edgeId = 'edge-' + state.nextEdgeId++;
-        
-        console.log('创建连接:', edgeId, '从', sourceNode.id, '到', targetNode.id);
-        
         const edge = {
-            id: edgeId,
-            sourceId: sourceNode.id,
-            targetId: targetNode.id,
+            id: state.nextEdgeId++,
+            source: sourceNode.id,
+            target: targetNode.id,
             amount: 0,
             description: ''
         };
         
         state.edges.push(edge);
         renderEdge(edge);
-        calculateFlows();
-        updateSummary();
+        
+        // 自动保存到本地存储
+        saveToLocalStorage();
+        
+        return edge;
     }
     
     // 渲染连接
     function renderEdge(edge) {
-        const sourceNode = findNodeById(edge.sourceId);
-        const targetNode = findNodeById(edge.targetId);
+        const sourceNode = findNodeById(edge.source);
+        const targetNode = findNodeById(edge.target);
         
-        if (!sourceNode || !targetNode) return;
+        if (!sourceNode || !targetNode) {
+            console.error('找不到边的源节点或目标节点', edge);
+            return;
+        }
         
-        // 创建连接元素
-        const edgeElement = document.createElement('div');
-        edgeElement.id = edge.id;
-        edgeElement.className = 'flowchart-edge';
+        // 检查是否已经存在这条边的元素
+        let edgeElement = document.getElementById(`edge-${edge.id}`);
         
-        // 创建连接线
-        const lineElement = document.createElement('div');
-        lineElement.className = 'edge-line';
+        if (!edgeElement) {
+            // 创建新的边元素
+            edgeElement = document.createElement('div');
+            edgeElement.id = `edge-${edge.id}`;
+            edgeElement.className = 'flowchart-edge';
+            edgeElement.dataset.id = edge.id;
+            
+            // 创建线条元素
+            const lineElement = document.createElement('div');
+            lineElement.className = 'edge-line';
+            edgeElement.appendChild(lineElement);
+            
+            // 创建标签元素
+            const labelElement = document.createElement('div');
+            labelElement.className = 'edge-label';
+            edgeElement.appendChild(labelElement);
+            
+            // 添加点击事件
+            edgeElement.addEventListener('click', function(e) {
+                e.stopPropagation();
+                selectEdge(edge);
+            });
+            
+            canvasContainer.appendChild(edgeElement);
+        }
         
-        // 创建标签
-        const labelElement = document.createElement('div');
-        labelElement.className = 'edge-label';
-        labelElement.textContent = edge.amount;
-        
-        edgeElement.appendChild(lineElement);
-        edgeElement.appendChild(labelElement);
-        canvasContainer.appendChild(edgeElement);
-        
-        // 更新连接位置
+        // 更新边的位置和标签
         updateEdgePosition(edge);
         
-        // 添加点击事件
-        edgeElement.addEventListener('click', function(e) {
-            e.stopPropagation();
-            console.log('连接被点击:', edge.id);
-            selectEdge(edge);
-        });
+        // 更新标签内容
+        const labelElement = edgeElement.querySelector('.edge-label');
+        labelElement.textContent = `${edge.amount}${edge.description ? ` (${edge.description})` : ''}`;
+        
+        return edgeElement;
     }
     
     // 更新所有连接
@@ -419,156 +530,188 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 更新连接位置
     function updateEdgePosition(edge) {
-        const edgeElement = document.getElementById(edge.id);
+        const edgeElement = document.getElementById(`edge-${edge.id}`);
         if (!edgeElement) return;
         
-        const sourceNode = findNodeById(edge.sourceId);
-        const targetNode = findNodeById(edge.targetId);
+        const sourceNode = findNodeById(edge.source);
+        const targetNode = findNodeById(edge.target);
         
-        if (!sourceNode || !targetNode) return;
+        if (!sourceNode || !targetNode) {
+            console.error('找不到边的源节点或目标节点', edge);
+            return;
+        }
         
-        const sourceElement = document.getElementById(sourceNode.id);
-        const targetElement = document.getElementById(targetNode.id);
+        const sourceElement = document.getElementById(`node-${sourceNode.id}`);
+        const targetElement = document.getElementById(`node-${targetNode.id}`);
         
-        if (!sourceElement || !targetElement) return;
+        if (!sourceElement || !targetElement) {
+            console.error('找不到边的源节点或目标节点元素', edge);
+            return;
+        }
         
-        // 计算源节点和目标节点的中心点
+        // 获取节点的位置和尺寸
         const sourceRect = sourceElement.getBoundingClientRect();
         const targetRect = targetElement.getBoundingClientRect();
-        const containerRect = canvasContainer.getBoundingClientRect();
+        const canvasRect = canvasContainer.getBoundingClientRect();
         
-        const sourceX = sourceRect.left - containerRect.left + sourceRect.width / 2;
-        const sourceY = sourceRect.top - containerRect.top + sourceRect.height / 2;
-        const targetX = targetRect.left - containerRect.left + targetRect.width / 2;
-        const targetY = targetRect.top - containerRect.top + targetRect.height / 2;
+        // 计算节点中心点相对于画布的位置
+        const sourceX = sourceRect.left + sourceRect.width / 2 - canvasRect.left;
+        const sourceY = sourceRect.top + sourceRect.height / 2 - canvasRect.top;
+        const targetX = targetRect.left + targetRect.width / 2 - canvasRect.left;
+        const targetY = targetRect.top + targetRect.height / 2 - canvasRect.top;
         
-        // 计算连接线的长度和角度
+        // 计算边的长度和角度
         const dx = targetX - sourceX;
         const dy = targetY - sourceY;
         const length = Math.sqrt(dx * dx + dy * dy);
         const angle = Math.atan2(dy, dx) * 180 / Math.PI;
         
-        // 更新连接线的样式
+        // 调整边的起点和终点，使其从节点边缘开始和结束
+        const nodeRadius = 50; // 节点半径，根据实际情况调整
+        const sourceOffsetX = Math.cos(angle * Math.PI / 180) * nodeRadius / 2;
+        const sourceOffsetY = Math.sin(angle * Math.PI / 180) * nodeRadius / 2;
+        const targetOffsetX = Math.cos(angle * Math.PI / 180) * nodeRadius / 2;
+        const targetOffsetY = Math.sin(angle * Math.PI / 180) * nodeRadius / 2;
+        
+        const adjustedLength = length - nodeRadius;
+        
+        // 更新边的位置和旋转
         const lineElement = edgeElement.querySelector('.edge-line');
-        lineElement.style.width = length + 'px';
-        lineElement.style.transform = `translate(${sourceX}px, ${sourceY}px) rotate(${angle}deg)`;
-        lineElement.style.transformOrigin = '0 0';
+        lineElement.style.width = `${adjustedLength}px`;
+        lineElement.style.left = `${sourceX + sourceOffsetX}px`;
+        lineElement.style.top = `${sourceY + sourceOffsetY}px`;
+        lineElement.style.transform = `rotate(${angle}deg)`;
         
         // 更新标签位置
         const labelElement = edgeElement.querySelector('.edge-label');
-        labelElement.style.left = (sourceX + targetX) / 2 + 'px';
-        labelElement.style.top = (sourceY + targetY) / 2 + 'px';
+        labelElement.style.left = `${sourceX + dx / 2}px`;
+        labelElement.style.top = `${sourceY + dy / 2}px`;
     }
     
-    // 选择节点进行编辑
+    // 选择节点
     function selectNode(node) {
-        // 取消选择之前选择的节点或连接
-        deselectAll();
-        
         console.log('选择节点:', node.id);
         
-        state.selectedNode = node;
-        document.getElementById(node.id).classList.add('selected');
-        
-        // 显示节点属性面板
-        nodePropertiesPanel.classList.remove('hidden');
-        edgePropertiesPanel.classList.add('hidden');
-        
-        // 填充表单字段
-        nodeName.value = node.name;
-        nodeBalance.value = node.balance;
-    }
-    
-    // 选择连接进行编辑
-    function selectEdge(edge) {
-        // 取消选择之前选择的节点或连接
+        // 取消之前的选择
         deselectAll();
         
-        console.log('选择连接:', edge.id);
+        // 设置当前选中的节点
+        state.selectedNode = node;
         
-        state.selectedEdge = edge;
-        document.getElementById(edge.id).classList.add('selected');
+        // 高亮显示选中的节点
+        const nodeElement = document.getElementById(`node-${node.id}`);
+        if (nodeElement) {
+            nodeElement.classList.add('selected');
+        }
         
-        // 显示连接属性面板
-        edgePropertiesPanel.classList.remove('hidden');
-        nodePropertiesPanel.classList.add('hidden');
-        
-        // 填充表单字段
-        edgeAmount.value = edge.amount;
-        edgeDescription.value = edge.description || '';
+        // 显示节点属性面板
+        nodeName.value = node.name;
+        nodeBalance.value = node.balance;
+        nodePropertiesPanel.classList.remove('hidden');
+        edgePropertiesPanel.classList.add('hidden');
     }
     
-    // 取消选择所有节点和连接
+    // 选择连接
+    function selectEdge(edge) {
+        console.log('选择连接:', edge.id);
+        
+        // 取消之前的选择
+        deselectAll();
+        
+        // 设置当前选中的连接
+        state.selectedEdge = edge;
+        
+        // 高亮显示选中的连接
+        const edgeElement = document.getElementById(`edge-${edge.id}`);
+        if (edgeElement) {
+            edgeElement.classList.add('selected');
+        }
+        
+        // 显示连接属性面板
+        edgeAmount.value = edge.amount;
+        edgeDescription.value = edge.description || '';
+        edgePropertiesPanel.classList.remove('hidden');
+        nodePropertiesPanel.classList.add('hidden');
+    }
+    
+    // 取消所有选择
     function deselectAll() {
-        console.log('取消选择所有');
+        // 取消节点选择
+        if (state.selectedNode) {
+            const nodeElement = document.getElementById(`node-${state.selectedNode.id}`);
+            if (nodeElement) {
+                nodeElement.classList.remove('selected');
+            }
+            state.selectedNode = null;
+        }
         
-        // 移除所有节点的选择类
-        document.querySelectorAll('.flowchart-node').forEach(el => {
-            el.classList.remove('selected');
-        });
+        // 取消连接选择
+        if (state.selectedEdge) {
+            const edgeElement = document.getElementById(`edge-${state.selectedEdge.id}`);
+            if (edgeElement) {
+                edgeElement.classList.remove('selected');
+            }
+            state.selectedEdge = null;
+        }
         
-        // 移除所有连接的选择类
-        document.querySelectorAll('.flowchart-edge').forEach(el => {
-            el.classList.remove('selected');
-        });
-        
-        state.selectedNode = null;
-        state.selectedEdge = null;
+        // 隐藏属性面板
+        nodePropertiesPanel.classList.add('hidden');
+        edgePropertiesPanel.classList.add('hidden');
     }
     
     // 保存节点属性
     function saveNodeProperties() {
         if (!state.selectedNode) return;
         
-        const node = state.selectedNode;
-        node.name = nodeName.value;
-        node.balance = parseFloat(nodeBalance.value) || 0;
+        console.log('保存节点属性', nodeName.value, nodeBalance.value);
         
-        console.log('保存节点属性:', node.id, node.name, node.balance);
+        // 更新节点属性
+        state.selectedNode.name = nodeName.value;
+        state.selectedNode.balance = parseFloat(nodeBalance.value) || 0;
         
         // 更新节点显示
-        const nodeElement = document.getElementById(node.id);
+        const nodeElement = document.getElementById(`node-${state.selectedNode.id}`);
         if (nodeElement) {
             const nameElement = nodeElement.querySelector('.node-name');
             const balanceElement = nodeElement.querySelector('.node-balance');
             
-            if (nameElement) nameElement.textContent = node.name;
-            if (balanceElement) balanceElement.textContent = '余额: ' + node.balance;
+            if (nameElement) nameElement.textContent = state.selectedNode.name;
+            if (balanceElement) balanceElement.textContent = state.selectedNode.balance;
         }
         
+        // 重新计算流量
         calculateFlows();
         updateSummary();
-        nodePropertiesPanel.classList.add('hidden');
-        deselectAll();
+        
+        // 自动保存到本地存储
+        saveToLocalStorage();
     }
     
     // 保存连接属性
     function saveEdgeProperties() {
         if (!state.selectedEdge) return;
         
-        const edge = state.selectedEdge;
-        edge.amount = parseFloat(edgeAmount.value) || 0;
-        edge.description = edgeDescription.value;
+        console.log('保存连接属性', edgeAmount.value, edgeDescription.value);
         
-        console.log('保存连接属性:', edge.id, edge.amount, edge.description);
+        // 更新连接属性
+        state.selectedEdge.amount = parseFloat(edgeAmount.value) || 0;
+        state.selectedEdge.description = edgeDescription.value;
         
-        // 更新连接标签
-        const edgeElement = document.getElementById(edge.id);
+        // 更新连接显示
+        const edgeElement = document.getElementById(`edge-${state.selectedEdge.id}`);
         if (edgeElement) {
             const labelElement = edgeElement.querySelector('.edge-label');
             if (labelElement) {
-                let labelText = edge.amount.toString();
-                if (edge.description) {
-                    labelText += ' (' + edge.description + ')';
-                }
-                labelElement.textContent = labelText;
+                labelElement.textContent = `${state.selectedEdge.amount}${state.selectedEdge.description ? ` (${state.selectedEdge.description})` : ''}`;
             }
         }
         
+        // 重新计算流量
         calculateFlows();
         updateSummary();
-        edgePropertiesPanel.classList.add('hidden');
-        deselectAll();
+        
+        // 自动保存到本地存储
+        saveToLocalStorage();
     }
     
     // 删除选中的节点或连接
@@ -586,51 +729,68 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 删除节点及其所有连接的连接
     function deleteNode(node) {
-        // 首先删除所有连接的连接
-        const connectedEdges = state.edges.filter(edge => 
-            edge.sourceId === node.id || edge.targetId === node.id
+        // 删除与该节点相关的所有边
+        const relatedEdges = state.edges.filter(edge => 
+            edge.source === node.id || edge.target === node.id
         );
         
-        console.log('删除连接的连接:', connectedEdges.length);
-        connectedEdges.forEach(deleteEdge);
+        relatedEdges.forEach(edge => {
+            deleteEdge(edge);
+        });
         
-        // 从DOM中删除节点元素
-        const nodeElement = document.getElementById(node.id);
-        if (nodeElement) {
-            canvasContainer.removeChild(nodeElement);
-        }
-        
-        // 从数据模型中删除
+        // 从状态中删除节点
         state.nodes = state.nodes.filter(n => n.id !== node.id);
         
-        state.selectedNode = null;
-        nodePropertiesPanel.classList.add('hidden');
+        // 从DOM中删除节点元素
+        const nodeElement = document.getElementById(`node-${node.id}`);
+        if (nodeElement) {
+            nodeElement.remove();
+        }
+        
+        // 如果删除的是当前选中的节点，清除选中状态
+        if (state.selectedNode && state.selectedNode.id === node.id) {
+            state.selectedNode = null;
+            nodePropertiesPanel.classList.add('hidden');
+        }
+        
+        // 重新计算流量
         calculateFlows();
         updateSummary();
+        
+        // 自动保存到本地存储
+        saveToLocalStorage();
     }
     
     // 删除连接
     function deleteEdge(edge) {
-        // 从DOM中删除连接元素
-        const edgeElement = document.getElementById(edge.id);
-        if (edgeElement) {
-            canvasContainer.removeChild(edgeElement);
-        }
-        
-        // 从数据模型中删除
+        // 从状态中删除边
         state.edges = state.edges.filter(e => e.id !== edge.id);
         
-        state.selectedEdge = null;
-        edgePropertiesPanel.classList.add('hidden');
+        // 从DOM中删除边元素
+        const edgeElement = document.getElementById(`edge-${edge.id}`);
+        if (edgeElement) {
+            edgeElement.remove();
+        }
+        
+        // 如果删除的是当前选中的边，清除选中状态
+        if (state.selectedEdge && state.selectedEdge.id === edge.id) {
+            state.selectedEdge = null;
+            edgePropertiesPanel.classList.add('hidden');
+        }
+        
+        // 重新计算流量
         calculateFlows();
         updateSummary();
+        
+        // 自动保存到本地存储
+        saveToLocalStorage();
     }
     
-    // 计算资金流动
+    // 计算流量
     function calculateFlows() {
-        console.log('计算流动');
+        console.log('计算流量');
         
-        // 重置所有节点流动
+        // 重置所有节点的流入和流出
         state.nodes.forEach(node => {
             node.inflow = 0;
             node.outflow = 0;
@@ -638,36 +798,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 计算每个节点的流入和流出
         state.edges.forEach(edge => {
-            const sourceNode = findNodeById(edge.sourceId);
-            const targetNode = findNodeById(edge.targetId);
+            const sourceNode = findNodeById(edge.source);
+            const targetNode = findNodeById(edge.target);
             
             if (sourceNode && targetNode) {
-                sourceNode.outflow += edge.amount;
-                targetNode.inflow += edge.amount;
-            }
-        });
-        
-        // 更新节点显示
-        state.nodes.forEach(node => {
-            const nodeElement = document.getElementById(node.id);
-            if (nodeElement) {
-                const balanceElement = nodeElement.querySelector('.node-balance');
-                if (balanceElement) {
-                    const netFlow = node.inflow - node.outflow;
-                    const finalBalance = node.balance + netFlow;
-                    balanceElement.textContent = '余额: ' + finalBalance;
-                    
-                    // 添加正/负余额的视觉指示
-                    if (finalBalance > 0) {
-                        balanceElement.classList.add('positive');
-                        balanceElement.classList.remove('negative');
-                    } else if (finalBalance < 0) {
-                        balanceElement.classList.add('negative');
-                        balanceElement.classList.remove('positive');
-                    } else {
-                        balanceElement.classList.remove('positive', 'negative');
-                    }
-                }
+                const amount = parseFloat(edge.amount) || 0;
+                sourceNode.outflow += amount;
+                targetNode.inflow += amount;
             }
         });
     }
@@ -685,7 +822,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // 总流量
         let totalFlow = 0;
         state.edges.forEach(edge => {
-            totalFlow += edge.amount;
+            totalFlow += parseFloat(edge.amount) || 0;
         });
         summaryHTML += `<div class="summary-item">总流量: ${totalFlow}</div>`;
         
@@ -730,6 +867,264 @@ document.addEventListener('DOMContentLoaded', function() {
     // 通过ID查找连接
     function findEdgeById(id) {
         return state.edges.find(edge => edge.id === id);
+    }
+    
+    // 数据持久化相关函数
+    function saveToLocalStorage() {
+        const data = {
+            nodes: state.nodes,
+            edges: state.edges,
+            nextNodeId: state.nextNodeId,
+            nextEdgeId: state.nextEdgeId,
+            canvasOffsetX: state.canvasOffsetX,
+            canvasOffsetY: state.canvasOffsetY
+        };
+        
+        localStorage.setItem('flowchartData', JSON.stringify(data));
+        console.log('数据已保存到本地存储');
+    }
+    
+    function loadFromLocalStorage() {
+        const savedData = localStorage.getItem('flowchartData');
+        if (savedData) {
+            try {
+                const data = JSON.parse(savedData);
+                
+                // 清空当前画布
+                clearCanvas();
+                
+                // 恢复状态
+                state.nodes = data.nodes || [];
+                state.edges = data.edges || [];
+                state.nextNodeId = data.nextNodeId || 1;
+                state.nextEdgeId = data.nextEdgeId || 1;
+                state.canvasOffsetX = data.canvasOffsetX || 0;
+                state.canvasOffsetY = data.canvasOffsetY || 0;
+                
+                // 更新画布位置
+                updateCanvasPosition(0, 0);
+                
+                // 重新渲染所有节点和边
+                state.nodes.forEach(node => renderNode(node));
+                state.edges.forEach(edge => renderEdge(edge));
+                
+                // 计算流量并更新汇总信息
+                calculateFlows();
+                updateSummary();
+                
+                console.log('从本地存储加载了数据');
+            } catch (error) {
+                console.error('加载数据时出错', error);
+                alert('加载数据时出错: ' + error.message);
+            }
+        }
+    }
+    
+    function clearAllData() {
+        // 清空本地存储
+        localStorage.removeItem('flowchartData');
+        
+        // 重置状态
+        state.nodes = [];
+        state.edges = [];
+        state.nextNodeId = 1;
+        state.nextEdgeId = 1;
+        state.selectedNode = null;
+        state.selectedEdge = null;
+        state.sourceNodeForEdge = null;
+        state.canvasOffsetX = 0;
+        state.canvasOffsetY = 0;
+        
+        // 清空画布
+        clearCanvas();
+        
+        // 更新画布位置
+        updateCanvasPosition(0, 0);
+        
+        // 更新汇总信息
+        updateSummary();
+        
+        console.log('已清空所有数据');
+    }
+    
+    function clearCanvas() {
+        // 移除所有节点和边元素
+        document.querySelectorAll('.flowchart-node, .flowchart-edge').forEach(el => {
+            el.remove();
+        });
+        
+        // 隐藏属性面板
+        nodePropertiesPanel.classList.add('hidden');
+        edgePropertiesPanel.classList.add('hidden');
+    }
+    
+    function exportData() {
+        const data = {
+            nodes: state.nodes,
+            edges: state.edges,
+            nextNodeId: state.nextNodeId,
+            nextEdgeId: state.nextEdgeId,
+            canvasOffsetX: state.canvasOffsetX,
+            canvasOffsetY: state.canvasOffsetY
+        };
+        
+        const jsonString = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'flowchart-data.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        console.log('数据已导出');
+    }
+    
+    function importData(file) {
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                
+                // 清空当前画布
+                clearCanvas();
+                
+                // 恢复状态
+                state.nodes = data.nodes || [];
+                state.edges = data.edges || [];
+                state.nextNodeId = data.nextNodeId || 1;
+                state.nextEdgeId = data.nextEdgeId || 1;
+                state.canvasOffsetX = data.canvasOffsetX || 0;
+                state.canvasOffsetY = data.canvasOffsetY || 0;
+                
+                // 更新画布位置
+                updateCanvasPosition(0, 0);
+                
+                // 重新渲染所有节点和边
+                state.nodes.forEach(node => renderNode(node));
+                state.edges.forEach(edge => renderEdge(edge));
+                
+                // 计算流量并更新汇总信息
+                calculateFlows();
+                updateSummary();
+                
+                // 保存到本地存储
+                saveToLocalStorage();
+                
+                console.log('已导入数据');
+                alert('数据导入成功');
+            } catch (error) {
+                console.error('导入数据时出错', error);
+                alert('导入数据时出错: ' + error.message);
+            }
+        };
+        
+        reader.onerror = function() {
+            console.error('读取文件时出错');
+            alert('读取文件时出错');
+        };
+        
+        reader.readAsText(file);
+    }
+    
+    // 修改findNodeAtPosition函数
+    function findNodeAtPosition(x, y) {
+        // 简单实现：检查点击位置是否在节点元素内
+        for (const node of state.nodes) {
+            const nodeElement = document.getElementById(`node-${node.id}`);
+            if (nodeElement) {
+                const rect = nodeElement.getBoundingClientRect();
+                const canvasRect = canvasContainer.getBoundingClientRect();
+                
+                const nodeX = rect.left - canvasRect.left + rect.width / 2;
+                const nodeY = rect.top - canvasRect.top + rect.height / 2;
+                const nodeRadius = rect.width / 2;
+                
+                const distance = Math.sqrt(Math.pow(x - nodeX, 2) + Math.pow(y - nodeY, 2));
+                
+                if (distance <= nodeRadius) {
+                    return node;
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    // 修改findEdgeAtPosition函数
+    function findEdgeAtPosition(x, y) {
+        // 简单实现：检查点击位置是否在连接线附近
+        for (const edge of state.edges) {
+            const edgeElement = document.getElementById(`edge-${edge.id}`);
+            if (edgeElement) {
+                const sourceNode = findNodeById(edge.source);
+                const targetNode = findNodeById(edge.target);
+                
+                if (!sourceNode || !targetNode) continue;
+                
+                const sourceElement = document.getElementById(`node-${sourceNode.id}`);
+                const targetElement = document.getElementById(`node-${targetNode.id}`);
+                
+                if (!sourceElement || !targetElement) continue;
+                
+                const sourceRect = sourceElement.getBoundingClientRect();
+                const targetRect = targetElement.getBoundingClientRect();
+                const canvasRect = canvasContainer.getBoundingClientRect();
+                
+                const sourceX = sourceRect.left - canvasRect.left + sourceRect.width / 2;
+                const sourceY = sourceRect.top - canvasRect.top + sourceRect.height / 2;
+                const targetX = targetRect.left - canvasRect.left + targetRect.width / 2;
+                const targetY = targetRect.top - canvasRect.top + targetRect.height / 2;
+                
+                // 计算点到线段的距离
+                const distance = distanceToLine(x, y, sourceX, sourceY, targetX, targetY);
+                
+                // 如果距离小于阈值，认为点击了这条边
+                if (distance < 10) {
+                    return edge;
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    // 计算点到线段的距离
+    function distanceToLine(x, y, x1, y1, x2, y2) {
+        const A = x - x1;
+        const B = y - y1;
+        const C = x2 - x1;
+        const D = y2 - y1;
+        
+        const dot = A * C + B * D;
+        const len_sq = C * C + D * D;
+        let param = -1;
+        
+        if (len_sq !== 0) {
+            param = dot / len_sq;
+        }
+        
+        let xx, yy;
+        
+        if (param < 0) {
+            xx = x1;
+            yy = y1;
+        } else if (param > 1) {
+            xx = x2;
+            yy = y2;
+        } else {
+            xx = x1 + param * C;
+            yy = y1 + param * D;
+        }
+        
+        const dx = x - xx;
+        const dy = y - yy;
+        
+        return Math.sqrt(dx * dx + dy * dy);
     }
     
     // 初始化应用

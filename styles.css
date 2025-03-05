@@ -13,6 +13,7 @@ body {
 .container {
     display: flex;
     height: 100vh;
+    padding-bottom: 60px;
 }
 
 .sidebar {
@@ -156,10 +157,12 @@ input {
 .edge-line {
     position: absolute;
     height: 2px;
-    background-color: #3498db;
-    transform-origin: 0 0;
+    background-color: #666;
+    transform-origin: left center;
+    transition: all 0.3s ease;
 }
 
+/* 添加箭头样式 */
 .edge-line::after {
     content: '';
     position: absolute;
@@ -167,9 +170,10 @@ input {
     top: -4px;
     width: 0;
     height: 0;
+    border-left: 10px solid #666;
     border-top: 5px solid transparent;
     border-bottom: 5px solid transparent;
-    border-left: 8px solid #3498db;
+    transform-origin: left center;
 }
 
 .edge-label {
@@ -186,6 +190,7 @@ input {
 
 .flowchart-edge.selected .edge-line {
     background-color: #e74c3c;
+    height: 3px;
 }
 
 .flowchart-edge.selected .edge-line::after {
@@ -232,4 +237,34 @@ input {
     border-radius: 4px;
     font-size: 0.9em;
     z-index: 100;
+}
+
+/* 数据管理按钮样式 */
+.data-management {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: #f8f8f8;
+    padding: 10px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    border-top: 1px solid #ddd;
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+}
+
+.data-management button {
+    padding: 8px 15px;
+    background-color: #4a6fa5;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.data-management button:hover {
+    background-color: #3a5a8c;
 }
