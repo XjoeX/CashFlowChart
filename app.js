@@ -1,4 +1,3 @@
-// 在页面加载完成后初始化应用
 document.addEventListener('DOMContentLoaded', function() {
     console.log('应用程序初始化中...');
     
@@ -223,12 +222,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const nodes = document.querySelectorAll('.flowchart-node');
         const edges = document.querySelectorAll('.flowchart-edge');
         
-        // 移动所有节点
-        nodes.forEach(node => {
-            const currentLeft = parseInt(node.style.left) || 0;
-            const currentTop = parseInt(node.style.top) || 0;
-            node.style.left = (currentLeft + dx) + 'px';
-            node.style.top = (currentTop + dy) + 'px';
+        // 移动所有节点的显示位置（不改变节点的相对坐标）
+        nodes.forEach(nodeElement => {
+            const currentLeft = parseInt(nodeElement.style.left) || 0;
+            const currentTop = parseInt(nodeElement.style.top) || 0;
+            nodeElement.style.left = (currentLeft + dx) + 'px';
+            nodeElement.style.top = (currentTop + dy) + 'px';
         });
         
         // 更新所有连接的位置
@@ -244,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
         state.mode = mode;
         
         // 重置按钮状态
-        addNodeBtn.classList.remove('active');
+   
         addEdgeBtn.classList.remove('active');
         
         // 重置操作提示
@@ -280,59 +279,37 @@ document.addEventListener('DOMContentLoaded', function() {
         
         console.log('画布点击位置:', x, y);
         
+        // 检查是否点击了节点或边（这部分由节点和边的点击事件处理）
+        const clickedElement = e.target.closest('.flowchart-node, .flowchart-edge');
+        if (clickedElement) {
+            return; // 如果点击了节点或边，不处理画布点击
+        }
+        
         if (state.mode === 'add-node') {
             // 添加节点模式
             const node = createNode(x, y);
             setMode('default');
-        } else if (state.mode === 'add-edge') {
-            // 添加连接模式
-            const clickedNode = findNodeAtPosition(x, y);
-            
-            if (clickedNode) {
-                if (!state.sourceNodeForEdge) {
-                    // 选择源节点
-                    state.sourceNodeForEdge = clickedNode;
-                    document.getElementById(`node-${clickedNode.id}`).classList.add('selected');
-                    document.getElementById('operation-hint').textContent = '请选择目标节点';
-                } else if (state.sourceNodeForEdge.id !== clickedNode.id) {
-                    // 选择目标节点并创建连接
-                    createEdge(state.sourceNodeForEdge, clickedNode);
-                    document.getElementById(`node-${state.sourceNodeForEdge.id}`).classList.remove('selected');
-                    state.sourceNodeForEdge = null;
-                    document.getElementById('operation-hint').textContent = '';
-                    setMode('default');
-                }
-            }
-        } else {
-            // 默认模式，检查是否点击了节点或连接
-            const clickedNode = findNodeAtPosition(x, y);
-            if (clickedNode) {
-                selectNode(clickedNode);
-                return;
-            }
-            
-            const clickedEdge = findEdgeAtPosition(x, y);
-            if (clickedEdge) {
-                selectEdge(clickedEdge);
-                return;
-            }
-            
-            // 如果没有点击任何对象，取消选择
+        } else if (state.mode === 'default') {
+            // 默认模式，取消选择
             deselectAll();
         }
     }
     
     // 创建新节点
     function createNode(x, y) {
+        const nodeId = state.nextNodeId++;
+        // 存储相对于画布原点的坐标，而不是相对于视口的坐标
         const node = {
-            id: state.nextNodeId++,
-            name: `节点 ${state.nextNodeId - 1}`,
-            x: x,
-            y: y,
+            id: nodeId,
+            name: `节点 ${nodeId}`,
+            x: x - state.canvasOffsetX, // 减去画布偏移量，存储相对于画布原点的坐标
+            y: y - state.canvasOffsetY, // 减去画布偏移量，存储相对于画布原点的坐标
             balance: 0,
             inflow: 0,
             outflow: 0
         };
+        
+        console.log('创建节点:', node);
         
         state.nodes.push(node);
         renderNode(node);
@@ -368,7 +345,31 @@ document.addEventListener('DOMContentLoaded', function() {
             // 添加点击事件
             nodeElement.addEventListener('click', function(e) {
                 e.stopPropagation();
-                selectNode(node);
+                
+                console.log('节点被点击:', node.id, '当前模式:', state.mode);
+                
+                // 检查当前模式
+                if (state.mode === 'add-edge') {
+                    // 添加连接模式
+                    if (!state.sourceNodeForEdge) {
+                        // 选择源节点
+                        state.sourceNodeForEdge = node;
+                        nodeElement.classList.add('selected');
+                        document.getElementById('operation-hint').textContent = '请选择目标节点';
+                        console.log('已选择源节点:', node.id);
+                    } else if (state.sourceNodeForEdge.id !== node.id) {
+                        // 选择目标节点并创建连接
+                        console.log('创建连接从', state.sourceNodeForEdge.id, '到', node.id);
+                        const edge = createEdge(state.sourceNodeForEdge, node);
+                        document.getElementById(`node-${state.sourceNodeForEdge.id}`).classList.remove('selected');
+                        state.sourceNodeForEdge = null;
+                        document.getElementById('operation-hint').textContent = '';
+                        setMode('default');
+                    }
+                } else {
+                    // 默认模式，选择节点进行编辑
+                    selectNode(node);
+                }
             });
             
             // 添加到画布
@@ -383,11 +384,28 @@ document.addEventListener('DOMContentLoaded', function() {
         const balanceElement = nodeElement.querySelector('.node-balance');
         
         nameElement.textContent = node.name;
-        balanceElement.textContent = node.balance;
         
-        // 更新节点位置
-        nodeElement.style.left = `${node.x}px`;
-        nodeElement.style.top = `${node.y}px`;
+        // 计算并显示最终余额
+        const netFlow = node.inflow - node.outflow;
+        const finalBalance = node.balance + netFlow;
+        balanceElement.textContent = finalBalance;
+        
+        // 添加正/负余额的视觉指示
+        if (finalBalance > 0) {
+            balanceElement.classList.add('positive');
+            balanceElement.classList.remove('negative');
+        } else if (finalBalance < 0) {
+            balanceElement.classList.add('negative');
+            balanceElement.classList.remove('positive');
+        } else {
+            balanceElement.classList.remove('positive', 'negative');
+        }
+        
+        // 更新节点位置，考虑画布偏移量
+        const displayX = node.x + state.canvasOffsetX;
+        const displayY = node.y + state.canvasOffsetY;
+        nodeElement.style.left = `${displayX}px`;
+        nodeElement.style.top = `${displayY}px`;
         
         return nodeElement;
     }
@@ -409,8 +427,8 @@ document.addEventListener('DOMContentLoaded', function() {
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
-            originalX = node.x;
-            originalY = node.y;
+            originalX = node.x; // 这是相对于画布原点的坐标
+            originalY = node.y; // 这是相对于画布原点的坐标
             
             // 添加拖动时的样式
             element.classList.add('dragging');
@@ -423,13 +441,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
             
-            // 更新节点位置
+            // 更新节点位置（相对于画布原点的坐标）
             node.x = originalX + dx;
             node.y = originalY + dy;
             
-            // 更新节点元素位置
-            element.style.left = `${node.x}px`;
-            element.style.top = `${node.y}px`;
+            // 更新节点元素位置（考虑画布偏移量）
+            const displayX = node.x + state.canvasOffsetX;
+            const displayY = node.y + state.canvasOffsetY;
+            element.style.left = `${displayX}px`;
+            element.style.top = `${displayY}px`;
             
             // 更新与该节点相关的所有连接
             updateEdgesForNode(node);
@@ -441,7 +461,7 @@ document.addEventListener('DOMContentLoaded', function() {
             isDragging = false;
             element.classList.remove('dragging');
             
-            // 保存到本地存储
+            // 自动保存到本地存储
             saveToLocalStorage();
         });
     }
@@ -457,6 +477,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 创建连接
     function createEdge(sourceNode, targetNode) {
+        console.log('创建连接从', sourceNode.id, '到', targetNode.id);
+        
         const edge = {
             id: state.nextEdgeId++,
             source: sourceNode.id,
@@ -465,8 +487,18 @@ document.addEventListener('DOMContentLoaded', function() {
             description: ''
         };
         
+        console.log('新创建的边:', edge);
+        
         state.edges.push(edge);
-        renderEdge(edge);
+        const renderedEdge = renderEdge(edge);
+        
+        if (!renderedEdge) {
+            console.error('边渲染失败:', edge);
+        }
+        
+        // 计算流量并更新汇总信息
+        calculateFlows();
+        updateSummary();
         
         // 自动保存到本地存储
         saveToLocalStorage();
@@ -476,12 +508,17 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 渲染连接
     function renderEdge(edge) {
+        console.log('渲染边:', edge);
+        
         const sourceNode = findNodeById(edge.source);
         const targetNode = findNodeById(edge.target);
         
+        console.log('源节点:', sourceNode);
+        console.log('目标节点:', targetNode);
+        
         if (!sourceNode || !targetNode) {
             console.error('找不到边的源节点或目标节点', edge);
-            return;
+            return null;
         }
         
         // 检查是否已经存在这条边的元素
@@ -567,13 +604,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const angle = Math.atan2(dy, dx) * 180 / Math.PI;
         
         // 调整边的起点和终点，使其从节点边缘开始和结束
-        const nodeRadius = 50; // 节点半径，根据实际情况调整
-        const sourceOffsetX = Math.cos(angle * Math.PI / 180) * nodeRadius / 2;
-        const sourceOffsetY = Math.sin(angle * Math.PI / 180) * nodeRadius / 2;
-        const targetOffsetX = Math.cos(angle * Math.PI / 180) * nodeRadius / 2;
-        const targetOffsetY = Math.sin(angle * Math.PI / 180) * nodeRadius / 2;
+        const nodeRadius = Math.min(sourceRect.width, targetRect.width) / 2;
+        const sourceOffsetX = Math.cos(angle * Math.PI / 180) * nodeRadius;
+        const sourceOffsetY = Math.sin(angle * Math.PI / 180) * nodeRadius;
+        const targetOffsetX = Math.cos(angle * Math.PI / 180) * nodeRadius;
+        const targetOffsetY = Math.sin(angle * Math.PI / 180) * nodeRadius;
         
-        const adjustedLength = length - nodeRadius;
+        const adjustedLength = length - nodeRadius * 2;
         
         // 更新边的位置和旋转
         const lineElement = edgeElement.querySelector('.edge-line');
@@ -807,6 +844,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 targetNode.inflow += amount;
             }
         });
+        
+        // 更新节点显示
+        updateNodeDisplays();
+    }
+    
+    // 更新所有节点的显示
+    function updateNodeDisplays() {
+        state.nodes.forEach(node => {
+            const nodeElement = document.getElementById(`node-${node.id}`);
+            if (nodeElement) {
+                const balanceElement = nodeElement.querySelector('.node-balance');
+                if (balanceElement) {
+                    const netFlow = node.inflow - node.outflow;
+                    const finalBalance = node.balance + netFlow;
+                    balanceElement.textContent = finalBalance;
+                    
+                    // 添加正/负余额的视觉指示
+                    if (finalBalance > 0) {
+                        balanceElement.classList.add('positive');
+                        balanceElement.classList.remove('negative');
+                    } else if (finalBalance < 0) {
+                        balanceElement.classList.add('negative');
+                        balanceElement.classList.remove('positive');
+                    } else {
+                        balanceElement.classList.remove('positive', 'negative');
+                    }
+                }
+            }
+        });
     }
     
     // 更新汇总面板
@@ -861,7 +927,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 通过ID查找节点
     function findNodeById(id) {
-        return state.nodes.find(node => node.id === id);
+        console.log('查找节点:', id, '所有节点:', state.nodes);
+        const node = state.nodes.find(node => node.id === id);
+        console.log('找到节点:', node);
+        return node;
     }
     
     // 通过ID查找连接
