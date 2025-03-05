@@ -1243,26 +1243,46 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 导出图片
     function exportImage() {
-        // 创建一个临时的canvas元素
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+        // 获取所有节点的边界
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         
-        // 获取画布容器的尺寸
-        const canvasRect = canvasContainer.getBoundingClientRect();
-        canvas.width = canvasRect.width;
-        canvas.height = canvasRect.height;
+        state.nodes.forEach(node => {
+            const displayX = node.x + state.canvasOffsetX;
+            const displayY = node.y + state.canvasOffsetY;
+            minX = Math.min(minX, displayX);
+            minY = Math.min(minY, displayY);
+            maxX = Math.max(maxX, displayX + 120); // 节点宽度
+            maxY = Math.max(maxY, displayY + 80);  // 节点高度
+        });
         
-        // 设置白色背景
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // 如果没有节点，使用画布容器的尺寸
+        if (minX === Infinity || state.nodes.length === 0) {
+            const canvasRect = canvasContainer.getBoundingClientRect();
+            minX = 0;
+            minY = 0;
+            maxX = canvasRect.width;
+            maxY = canvasRect.height;
+        }
+        
+        // 添加边距
+        const padding = 50;
+        minX = Math.max(0, minX - padding);
+        minY = Math.max(0, minY - padding);
+        maxX += padding;
+        maxY += padding;
         
         // 使用html2canvas库将画布容器转换为图像
         html2canvas(canvasContainer, {
-            backgroundColor: null,
-            canvas: canvas,
+            backgroundColor: 'white',
             scale: 2, // 提高清晰度
             useCORS: true,
-            logging: false
+            logging: false,
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY,
+            windowWidth: document.documentElement.offsetWidth,
+            windowHeight: document.documentElement.offsetHeight
         }).then(function(canvas) {
             // 将canvas转换为图片URL
             const imgURL = canvas.toDataURL('image/png');
@@ -1278,7 +1298,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.removeChild(downloadLink);
         }).catch(function(error) {
             console.error('导出图片失败:', error);
-            alert('导出图片失败，请确保已加载html2canvas库');
+            alert('导出图片失败: ' + error.message);
         });
     }
     
