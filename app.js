@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const exportDataBtn = document.getElementById('export-data-btn');
     const importDataBtn = document.getElementById('import-data-btn');
     const importFile = document.getElementById('import-file');
+    const saveImageBtn = document.getElementById('save-image-btn');
     
     // 应用状态
     const state = {

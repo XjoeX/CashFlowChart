@@ -151,7 +151,8 @@ input {
 /* 连接样式 */
 .flowchart-edge {
     position: absolute;
-    z-index: 5;
+    z-index: 20;
+    pointer-events: auto;
 }
 
 .edge-line {
@@ -160,6 +161,7 @@ input {
     background-color: #666;
     transform-origin: left center;
     transition: all 0.3s ease;
+    z-index: 20;
 }
 
 /* 添加箭头样式 */
@@ -174,32 +176,34 @@ input {
     border-top: 5px solid transparent;
     border-bottom: 5px solid transparent;
     transform-origin: left center;
+    z-index: 21;
 }
 
 .edge-label {
     position: absolute;
-    padding: 3px 6px;
-    background-color: rgba(255, 255, 255, 0.8);
-    border-radius: 3px;
-    border: 1px solid #ddd;
-    font-size: 0.8em;
-    cursor: pointer;
     transform: translate(-50%, -50%);
-    z-index: 6;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+    z-index: 22;
 }
 
 .flowchart-edge.selected .edge-line {
     background-color: #e74c3c;
     height: 3px;
+    z-index: 25;
 }
 
 .flowchart-edge.selected .edge-line::after {
     border-left-color: #e74c3c;
+    z-index: 26;
 }
 
 .flowchart-edge.selected .edge-label {
     background-color: rgba(231, 76, 60, 0.2);
     border-color: #e74c3c;
+    z-index: 27;
 }
 
 /* 汇总面板样式 */
