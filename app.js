@@ -55,6 +55,29 @@ document.addEventListener('DOMContentLoaded', function() {
         // 添加画布拖动功能
         setupCanvasPanning();
         
+        // 为节点属性输入框添加回车保存功能
+        nodeName.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveNodeProperties();
+            }
+        });
+        
+        nodeBalance.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveNodeProperties();
+            }
+        });
+        
+        // 为边属性容器添加回车保存功能
+        edgeAmountsContainer.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && (e.target.classList.contains('edge-amount') || e.target.classList.contains('edge-description'))) {
+                e.preventDefault();
+                saveEdgeProperties();
+            }
+        });
+        
         // 绑定事件
         addNodeBtn.addEventListener('click', function() {
             console.log('添加节点按钮被点击');
