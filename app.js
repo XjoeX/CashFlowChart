@@ -25,6 +25,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const exportImageBtn = document.getElementById('export-image-btn');
     const importFile = document.getElementById('import-file');
     
+    // 在文件开头的 DOM 元素获取部分添加
+    const addAmountBtn = document.getElementById('add-amount-btn');
+    const edgeAmountsContainer = document.getElementById('edge-amounts-container');
+    
     // 应用状态
     const state = {
         nodes: [],
@@ -499,8 +503,8 @@ document.addEventListener('DOMContentLoaded', function() {
             id: state.nextEdgeId++,
             source: sourceNode.id,
             target: targetNode.id,
-            amount: 0,
-            description: ''
+            amounts: [0], // 改为数组，初始包含一个金额
+            descriptions: [''] // 对应的描述数组
         };
         
         console.log('新创建的边:', edge);
@@ -571,8 +575,18 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 更新标签内容
         const labelElement = edgeElement.querySelector('.edge-label');
-        const formattedAmount = parseFloat(edge.amount).toFixed(2);
-        labelElement.textContent = `${formattedAmount}${edge.description ? ` (${edge.description})` : ''}`;
+        if (labelElement) {
+            // 确保 amounts 和 descriptions 数组存在
+            edge.amounts = edge.amounts || [0];
+            edge.descriptions = edge.descriptions || [''];
+            
+            // 计算总金额
+            const totalAmount = edge.amounts.reduce((sum, amount) => sum + (parseFloat(amount) || 0), 0).toFixed(2);
+            const amountTexts = edge.amounts.map((amount, i) => 
+                `${parseFloat(amount || 0).toFixed(2)}${edge.descriptions[i] ? ` (${edge.descriptions[i]})` : ''}`
+            );
+            labelElement.innerHTML = `${totalAmount}<br><span class="amount-details">${amountTexts.join('<br>')}</span>`;
+        }
         
         return edgeElement;
     }
@@ -681,9 +695,14 @@ document.addEventListener('DOMContentLoaded', function() {
             edgeElement.classList.add('selected');
         }
         
+        // 清空并重新填充金额输入容器
+        edgeAmountsContainer.innerHTML = '';
+        edge.amounts.forEach((amount, index) => {
+            const group = createAmountInput(amount, edge.descriptions[index], index);
+            edgeAmountsContainer.appendChild(group);
+        });
+        
         // 显示连接属性面板
-        edgeAmount.value = edge.amount;
-        edgeDescription.value = edge.description || '';
         edgePropertiesPanel.classList.remove('hidden');
         nodePropertiesPanel.classList.add('hidden');
     }
@@ -763,19 +782,32 @@ document.addEventListener('DOMContentLoaded', function() {
     function saveEdgeProperties() {
         if (!state.selectedEdge) return;
         
-        console.log('保存连接属性', edgeAmount.value, edgeDescription.value);
+        // 收集所有金额和描述
+        const amountGroups = edgeAmountsContainer.querySelectorAll('.amount-group');
+        const amounts = [];
+        const descriptions = [];
+        
+        amountGroups.forEach(group => {
+            const amountInput = group.querySelector('.edge-amount');
+            const descriptionInput = group.querySelector('.edge-description');
+            amounts.push(parseFloat(amountInput.value) || 0);
+            descriptions.push(descriptionInput.value || '');
+        });
         
         // 更新连接属性
-        state.selectedEdge.amount = parseFloat(parseFloat(edgeAmount.value).toFixed(2)) || 0;
-        state.selectedEdge.description = edgeDescription.value;
+        state.selectedEdge.amounts = amounts.map(amount => parseFloat(amount.toFixed(2)));
+        state.selectedEdge.descriptions = descriptions;
         
         // 更新连接显示
         const edgeElement = document.getElementById(`edge-${state.selectedEdge.id}`);
         if (edgeElement) {
             const labelElement = edgeElement.querySelector('.edge-label');
             if (labelElement) {
-                const formattedAmount = parseFloat(state.selectedEdge.amount).toFixed(2);
-                labelElement.textContent = `${formattedAmount}${state.selectedEdge.description ? ` (${state.selectedEdge.description})` : ''}`;
+                const totalAmount = amounts.reduce((sum, amount) => sum + amount, 0).toFixed(2);
+                const amountTexts = amounts.map((amount, i) => 
+                    `${amount.toFixed(2)}${descriptions[i] ? ` (${descriptions[i]})` : ''}`
+                );
+                labelElement.innerHTML = `${totalAmount}<br><span class="amount-details">${amountTexts.join('<br>')}</span>`;
             }
         }
         
@@ -875,9 +907,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const targetNode = findNodeById(edge.target);
             
             if (sourceNode && targetNode) {
-                const amount = parseFloat(edge.amount) || 0;
-                sourceNode.outflow = parseFloat((sourceNode.outflow + amount).toFixed(2));
-                targetNode.inflow = parseFloat((targetNode.inflow + amount).toFixed(2));
+                // 计算边的总金额
+                const totalAmount = edge.amounts.reduce((sum, amount) => sum + (parseFloat(amount) || 0), 0);
+                sourceNode.outflow = parseFloat((sourceNode.outflow + totalAmount).toFixed(2));
+                targetNode.inflow = parseFloat((targetNode.inflow + totalAmount).toFixed(2));
             }
         });
         
@@ -1301,6 +1334,49 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('导出图片失败: ' + error.message);
         });
     }
+    
+    // 创建单个金额输入组
+    function createAmountInput(amount, description, index) {
+        const group = document.createElement('div');
+        group.className = 'form-group amount-group';
+        group.dataset.index = index;
+        
+        group.innerHTML = `
+            <div class="amount-header">
+                <span>第 ${index + 1} 笔</span>
+                ${index > 0 ? '<button class="remove-amount-btn" type="button">删除</button>' : ''}
+            </div>
+            <div class="amount-inputs">
+                <div>
+                    <label>金额:</label>
+                    <input type="number" class="edge-amount" value="${amount}">
+                </div>
+                <div>
+                    <label>描述:</label>
+                    <input type="text" class="edge-description" value="${description}">
+                </div>
+            </div>
+        `;
+        
+        // 添加删除按钮事件
+        const removeBtn = group.querySelector('.remove-amount-btn');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', function() {
+                group.remove();
+            });
+        }
+        
+        return group;
+    }
+    
+    // 添加金额按钮事件
+    addAmountBtn.addEventListener('click', function() {
+        if (!state.selectedEdge) return;
+        
+        const index = edgeAmountsContainer.children.length;
+        const group = createAmountInput(0, '', index);
+        edgeAmountsContainer.appendChild(group);
+    });
     
     // 初始化应用
     init();

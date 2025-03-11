@@ -278,3 +278,85 @@ input {
 .data-management button:hover {
     background-color: #3a5a8c;
 }
+
+.amount-group {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.amount-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.amount-header span {
+    font-weight: bold;
+    color: #666;
+}
+
+.amount-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.amount-inputs > div {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.amount-inputs label {
+    min-width: 60px;
+}
+
+.remove-amount-btn {
+    background-color: #ff4d4d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 12px;
+    min-width: auto;
+    width: auto;
+    margin: 0;
+}
+
+.remove-amount-btn:hover {
+    background-color: #ff3333;
+}
+
+#add-amount-btn {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    cursor: pointer;
+    margin-bottom: 15px;
+    width: 100%;
+}
+
+#add-amount-btn:hover {
+    background-color: #45a049;
+}
+
+.edge-label {
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    text-align: center;
+}
+
+.amount-details {
+    font-size: 10px;
+    color: #666;
+    display: block;
+    margin-top: 4px;
+}
